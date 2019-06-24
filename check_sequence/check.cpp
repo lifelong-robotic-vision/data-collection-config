@@ -2,6 +2,9 @@
 #include "sensor_msgs/Image.h"
 #include "sensor_msgs/Imu.h"
 #include "nav_msgs/Odometry.h"
+#include <fstream>
+#include <vector>
+#include <memory>
 
 class HeaderChecker {
 public:
@@ -71,18 +74,43 @@ public:
 
 int main(int argc, char *argv[])
 {
-    ROS_INFO("start check...");
-    ros::init(argc, argv, "check_msg");
+    ros::init(argc, argv, "check_sequence");
     ros::NodeHandle nh;
-    HeaderChecker color_checker("color", 30);
-    HeaderChecker depth_checker("depth", 30);
-    HeaderChecker gyro_checker("gyro", 400);
-    HeaderChecker accel_checker("accel", 250);
-    ros::Subscriber sub_color = nh.subscribe("/camera/color/image_raw", 2000, &HeaderChecker::callback<sensor_msgs::Image>, &color_checker);
-    ros::Subscriber sub_depth = nh.subscribe("/camera/aligned_depth_to_color/image_raw", 2000, &HeaderChecker::callback<sensor_msgs::Image>, &depth_checker);
-    ros::Subscriber sub_gyro = nh.subscribe("/camera/gyro/sample", 2000, &HeaderChecker::callback<sensor_msgs::Imu>, &gyro_checker);
-    ros::Subscriber sub_accel = nh.subscribe("/camera/accel/sample", 2000, &HeaderChecker::callback<sensor_msgs::Imu>, &accel_checker);
+    ros::NodeHandle pnh("~");
+    std::string config_file;
+    pnh.param("config", config_file, std::string());
 
+    std::ifstream file(config_file.c_str());
+    if(!file.is_open()) {
+        ROS_ERROR("Cannot open the specified config file \"%s\"", config_file.c_str());
+        return 0;
+    }
+
+    std::vector<std::unique_ptr<HeaderChecker>> checkers;
+    std::vector<ros::Subscriber> subs;
+    for (std::string line; std::getline(file, line);) {
+        if (line.empty() || line[0] == '#') continue;
+        std::stringstream sline(line);
+        std::string name, type, topic;
+        double fps;
+        sline >> name >> type >> fps >> topic;
+        checkers.emplace_back(std::make_unique<HeaderChecker>(name, fps));
+        bool subscribed = true;
+        if (type == "Image") subs.emplace_back(nh.subscribe(topic, 2000, &HeaderChecker::callback<sensor_msgs::Image>, checkers.back().get()));
+        else if (type == "Imu") subs.emplace_back(nh.subscribe(topic, 2000, &HeaderChecker::callback<sensor_msgs::Imu>, checkers.back().get()));
+        else {
+            subscribed = false;
+            ROS_WARN("Unsupported message type \"%s\"", type.c_str());
+        }
+        if (subscribed) {
+            ROS_INFO("Subscribed to %s (expected FPS: %.1lf)", topic.c_str(), fps);
+        } else {
+            checkers.pop_back();
+        }
+    }
+    file.close();
+
+    ROS_INFO("start check...");
     ros::spin();
     printf("\n");
 
