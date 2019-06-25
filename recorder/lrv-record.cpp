@@ -22,33 +22,47 @@ void intHandler(int sig)
     running = false;
 }
 
-int main(int argc, char * argv[]) try
+int main(int argc, char * argv[])
 {
-    std::string outfile = (argc > 1) ? std::string(argv[1]) : std::string("record.bag");
+    std::string outfile = (argc > 1) ? std::string(argv[1]) : std::string("record");
 
-    rs2::pipeline pipe;
-    rs2::pipeline_profile selection = pipe.start();
-    rs2::device selected_device = selection.get_device();
-    std::string camera_name(selected_device.get_info(RS2_CAMERA_INFO_NAME));
-    const std::string d435i_name("D435I");
-    const std::string t265_name("T265");
-    if (camera_name.find(d435i_name) != std::string::npos) {
-        std::cout << "Found D435i\n";
+    rs2::context ctx; // Create librealsense context for managing devices
+
+    std::vector<rs2::config> cfgs;
+    std::vector<std::string> filenames;
+    for (auto&& dev : ctx.query_devices())
+    {
+        std::string camera_name(dev.get_info(RS2_CAMERA_INFO_NAME));
+        std::cout << "Found " << camera_name << std::endl;
+        if (camera_name.find(std::string("D435I")) != std::string::npos) {
+            filenames.push_back(outfile + "-d400.bag");
+            cfgs.emplace_back();
+            rs2::config &cfg = cfgs.back();
+            cfg.enable_device(dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+            cfg.enable_record_to_file(filenames.back());
+            cfg.enable_stream(RS2_STREAM_COLOR, 848, 480, RS2_FORMAT_RGB8, 30);
+            cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 30);
+            //cfg.enable_stream(RS2_STREAM_INFRARED, 1, 848, 480, RS2_FORMAT_Y8, 30);
+            //cfg.enable_stream(RS2_STREAM_INFRARED, 2, 848, 480, RS2_FORMAT_Y8, 30);
+            cfg.enable_stream(RS2_STREAM_ACCEL, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 63);
+            cfg.enable_stream(RS2_STREAM_GYRO, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 200);
+            auto sensors = dev.query_sensors();
+            for (auto s : sensors) if (s.supports(RS2_OPTION_AUTO_EXPOSURE_PRIORITY)) {
+                s.set_option(RS2_OPTION_AUTO_EXPOSURE_PRIORITY, 0);
+            }
+        } else if (camera_name.find(std::string("T265")) != std::string::npos) {
+            filenames.push_back(outfile + "-t265.bag");
+            cfgs.emplace_back();
+            rs2::config &cfg = cfgs.back();
+            cfg.enable_device(dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+            cfg.enable_record_to_file(filenames.back());
+            cfg.enable_stream(RS2_STREAM_FISHEYE, 1, 848, 800, RS2_FORMAT_Y8, 30);
+            cfg.enable_stream(RS2_STREAM_FISHEYE, 2, 848, 800, RS2_FORMAT_Y8, 30);
+            cfg.enable_stream(RS2_STREAM_ACCEL, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 62);
+            cfg.enable_stream(RS2_STREAM_GYRO, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 200);
+            cfg.enable_stream(RS2_STREAM_POSE, 0, 0, RS2_FORMAT_6DOF, 200);
+        }
     }
-    pipe.stop();
-/* TODO how to change this option?
-    auto depth_sensor = selected_device.first<rs2::depth_sensor>();
-    depth_sensor.set_option(RS2_OPTION_AUTO_EXPOSURE_PRIORITY, 0);
-*/
-    rs2::config cfg;
-    cfg.enable_record_to_file(outfile);
-    int id = 0;
-    cfg.enable_stream(RS2_STREAM_COLOR, 848, 480, RS2_FORMAT_RGB8, 30);
-    cfg.enable_stream(RS2_STREAM_DEPTH, 0, 848, 480, RS2_FORMAT_Z16, 30);
-    cfg.enable_stream(RS2_STREAM_INFRARED, 1, 848, 480, RS2_FORMAT_Y8, 30);
-    cfg.enable_stream(RS2_STREAM_INFRARED, 2, 848, 480, RS2_FORMAT_Y8, 30);
-    cfg.enable_stream(RS2_STREAM_ACCEL, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 63);
-    cfg.enable_stream(RS2_STREAM_GYRO, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 200);
 
     std::mutex m;
     auto callback = [&](const rs2::frame& frame)
@@ -64,27 +78,29 @@ int main(int argc, char * argv[]) try
         }
     };
 
+    std::vector<rs2::pipeline> pipelines;
+    for (size_t i = 0; i < cfgs.size(); ++i) {
+        pipelines.emplace_back();
+        try {
+            pipelines.back().start(cfgs[i]/*, callback*/);
+        } catch (const rs2::error & e) {
+            std::cerr << filenames[i] << ": Error calling " << e.get_failed_function() << "(" << e.get_failed_args() << "):\n    " << e.what() << std::endl;
+            pipelines.pop_back();
+            continue;
+        }
+        std::cout << filenames[i] << ": start recording" << std::endl;
+    }
+
     signal(SIGINT, intHandler);
     std::cout << "======================= Press Ctrl+C to stop =======================\n";
-
-    rs2::pipeline_profile profiles = pipe.start(cfg, callback);
-
     while(running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     std::cout << "\nFinished" << std::endl;
 
-    pipe.stop();
+    for (auto &pipe : pipelines) {
+        pipe.stop();
+    }
 
     return EXIT_SUCCESS;
-}
-catch (const rs2::error & e)
-{
-    std::cerr << "RealSense error calling " << e.get_failed_function() << "(" << e.get_failed_args() << "):\n    " << e.what() << std::endl;
-    return EXIT_FAILURE;
-}
-catch (const std::exception& e)
-{
-    std::cerr << e.what() << std::endl;
-    return EXIT_FAILURE;
 }
