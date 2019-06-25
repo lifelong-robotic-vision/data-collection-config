@@ -31,10 +31,10 @@ public:
 
     void check(const std_msgs::Header& header)
     {
-        if (count_ != 0) {
+        while (count_ != 0) {
             if (header.seq < last_seq_ + 1) {
                 ROS_ERROR("%s: message comes out of order! (seq %u -> %u)", name_.c_str(), last_seq_, header.seq);
-                return;
+                break;
             } else if (header.seq > last_seq_ + 1) {
                 ROS_ERROR("%s: message drop! (seq %u -> %u)", name_.c_str(), last_seq_, header.seq);
             }
@@ -44,12 +44,13 @@ public:
             mean_interval_ += interval;
             abs_error_ += std::abs(interval - expected_interval_);
             if (interval > 1.5 * expected_interval_) {
-                ROS_WARN("%s: large interval %lf ms (expect %lf), may be frame drop", name_.c_str(), interval, expected_interval_);
+                ROS_WARN("%s: seq %u->%u: large interval %lf ms (expect %lf), may be frame drop", name_.c_str(), last_seq_, header.seq, interval, expected_interval_);
                 ++large_;
             } else if (interval < 0) {
-                ROS_WARN("%s: negative interval %lf ms", name_.c_str(), interval);
+                ROS_WARN("%s: seq %u->%u: negative interval %lf ms", name_.c_str(), last_seq_, header.seq, interval);
                 ++negative_;
             }
+            break;
         }
         last_seq_ = header.seq;
         last_stamp_ = header.stamp.toSec() * 1000.;
