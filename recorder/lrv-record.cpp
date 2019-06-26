@@ -81,26 +81,35 @@ int main(int argc, char * argv[])
     std::vector<rs2::pipeline> pipelines;
     for (size_t i = 0; i < cfgs.size(); ++i) {
         pipelines.emplace_back(ctx);
-        try {
+        int retry = 5;
+        while (retry) try {
             pipelines.back().start(cfgs[i]/*, callback*/);
+            break;
         } catch (const rs2::error & e) {
             std::cerr << filenames[i] << ": Error calling " << e.get_failed_function() << "(" << e.get_failed_args() << "):\n    " << e.what() << std::endl;
-            pipelines.pop_back();
+            if (--retry) std::cout << "Will retry for " << retry << " times..." << std::endl;
             continue;
         }
-        std::cout << filenames[i] << ": start recording" << std::endl;
+        if (retry) {
+            std::cout << filenames[i] << ": start recording" << std::endl;
+        } else {
+            std::cout << filenames[i] << " failed to start" << std::endl;
+            pipelines.pop_back();
+        }
     }
 
+    if (pipelines.empty()) return EXIT_FAILURE;
     signal(SIGINT, intHandler);
     std::cout << "======================= Press Ctrl+C to stop =======================\n";
     while(running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    std::cout << "\nFinished" << std::endl;
+    std::cout << "\nStopping..." << std::flush;
 
     for (auto &pipe : pipelines) {
         pipe.stop();
     }
+    std::cout << "Stopped" << std::endl;
 
     return EXIT_SUCCESS;
 }
