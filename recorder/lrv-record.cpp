@@ -47,8 +47,18 @@ int main(int argc, char * argv[])
             cfg.enable_stream(RS2_STREAM_ACCEL, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 63);
             cfg.enable_stream(RS2_STREAM_GYRO, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 200);
             auto sensors = dev.query_sensors();
-            for (auto s : sensors) if (s.supports(RS2_OPTION_AUTO_EXPOSURE_PRIORITY)) {
-                s.set_option(RS2_OPTION_AUTO_EXPOSURE_PRIORITY, 0);
+            for (auto s : sensors) {
+                if (s.supports(RS2_OPTION_AUTO_EXPOSURE_PRIORITY)) {
+                    s.set_option(RS2_OPTION_AUTO_EXPOSURE_PRIORITY, 0);
+                }
+                if (s.supports(RS2_OPTION_FRAMES_QUEUE_SIZE)) {
+                    float max = s.get_option_range(RS2_OPTION_FRAMES_QUEUE_SIZE).max;
+                    s.set_option(RS2_OPTION_FRAMES_QUEUE_SIZE, max);
+                }
+                if (s.supports(RS2_OPTION_VISUAL_PRESET)) {
+                    float v = s.get_option(RS2_OPTION_VISUAL_PRESET);
+                    s.set_option(RS2_OPTION_VISUAL_PRESET, RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
+                }
             }
         } else if (camera_name.find(std::string("T265")) != std::string::npos) {
             filenames.push_back(outfile + "-t265.bag");
