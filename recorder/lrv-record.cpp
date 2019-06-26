@@ -80,7 +80,7 @@ int main(int argc, char * argv[])
 
     std::vector<rs2::pipeline> pipelines;
     for (size_t i = 0; i < cfgs.size(); ++i) {
-        pipelines.emplace_back();
+        pipelines.emplace_back(ctx);
         try {
             pipelines.back().start(cfgs[i]/*, callback*/);
         } catch (const rs2::error & e) {
