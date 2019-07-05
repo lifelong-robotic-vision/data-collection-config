@@ -91,7 +91,8 @@ int main(int argc, char * argv[])
     };
 
     std::vector<rs2::pipeline> pipelines;
-    for (size_t i = 0; i < cfgs.size(); ++i) {
+    // We need to start T265 first!! For some reason I can't explain.
+    for (ssize_t i = cfgs.size() - 1; i >= 0 ; --i) {
         pipelines.emplace_back(ctx);
         int retry = 5;
         while (retry) try {
