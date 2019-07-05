@@ -42,8 +42,8 @@ int main(int argc, char * argv[])
             cfg.enable_record_to_file(filenames.back());
             cfg.enable_stream(RS2_STREAM_COLOR, 848, 480, RS2_FORMAT_RGB8, 30);
             cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 30);
-            //cfg.enable_stream(RS2_STREAM_INFRARED, 1, 848, 480, RS2_FORMAT_Y8, 30);
-            //cfg.enable_stream(RS2_STREAM_INFRARED, 2, 848, 480, RS2_FORMAT_Y8, 30);
+            cfg.enable_stream(RS2_STREAM_INFRARED, 1, 848, 480, RS2_FORMAT_Y8, 30);
+            cfg.enable_stream(RS2_STREAM_INFRARED, 2, 848, 480, RS2_FORMAT_Y8, 30);
             cfg.enable_stream(RS2_STREAM_ACCEL, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 250);
             cfg.enable_stream(RS2_STREAM_GYRO, 1, 1, RS2_FORMAT_MOTION_XYZ32F, 400);
             auto sensors = dev.query_sensors();
@@ -56,8 +56,10 @@ int main(int argc, char * argv[])
                     s.set_option(RS2_OPTION_FRAMES_QUEUE_SIZE, max);
                 }
                 if (s.supports(RS2_OPTION_VISUAL_PRESET)) {
-                    float v = s.get_option(RS2_OPTION_VISUAL_PRESET);
                     s.set_option(RS2_OPTION_VISUAL_PRESET, RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
+                }
+                if (s.supports(RS2_OPTION_ENABLE_MOTION_CORRECTION)) {
+                    s.set_option(RS2_OPTION_ENABLE_MOTION_CORRECTION, 0);
                 }
             }
         } else if (camera_name.find(std::string("T265")) != std::string::npos) {
