@@ -4,6 +4,8 @@ import numpy
 import math
 from termcolor import colored
 
+verbose = False
+
 def check_headers(headers):
     logs = {}
     log_ids = []
@@ -52,7 +54,34 @@ def check_headers(headers):
         if not logs.has_key(t):
             logs[t] = (("small interval (seq %d->%d " + colored("interval %f ms", 'red') + ")") % (headers[i].seq, headers[i+1].seq, ints[i]))
 
-    for t in sorted(logs.keys()): print ("\t" + "%2.0f%%: " % ((t-tmin) / (tmax-tmin) * 100)  + logs[t])
+    global verbose
+    if verbose:
+        for t in sorted(logs.keys()): print ("\t" + "%2.0f%%: " % ((t-tmin) / (tmax-tmin) * 100)  + logs[t])
+    else:
+        ndrop = 0
+        norder = 0
+        ninvalid = 0
+        nsmall = 0
+        msg = list('.' * 100)
+        for t in logs.keys():
+            perc = int((t-tmin) / (tmax-tmin) * 100)
+            if 'drop' in logs[t] or 'large' in logs[t]:
+                ndrop += 1
+                msg[perc] = 'D'
+            elif 'out-of-order' in logs[t]:
+                norder += 1
+                msg[perc] = 'O'
+            elif 'invalid' in logs[t]:
+                ninvalid += 1
+                msg[perc] = 'I'
+            elif 'small' in logs[t]:
+                nsmall += 1
+                if msg[perc] == '.': msg[perc] = 's'
+        ratio = 100. / len(headers)
+        ntotal = ndrop + norder + ninvalid + nsmall
+        print ('%d drops (%.1f%%); %d out-of-order (%.1f%%); %d invalid stamp (%.1f%%); %d small intervals (%.1f%%); %d total abnormal (%.1f%%)' \
+            % (ndrop, ndrop * ratio, norder, norder * ratio, ninvalid, ninvalid * ratio, nsmall, nsmall * ratio, ntotal, ntotal * ratio))
+        print (''.join(msg))
 
 def print_highlight(s):
     print (colored(s, 'yellow'))
