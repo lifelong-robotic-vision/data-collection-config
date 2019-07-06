@@ -65,6 +65,7 @@ def check_headers(headers):
         msg = list('.' * 100)
         for t in logs.keys():
             perc = int((t-tmin) / (tmax-tmin) * 100)
+            if perc < 0 or perc > 100: print perc
             if 'drop' in logs[t] or 'large' in logs[t]:
                 ndrop += 1
                 msg[perc] = 'D'

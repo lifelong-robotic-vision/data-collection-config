@@ -66,7 +66,8 @@ int main(int argc, char * argv[])
             filenames.push_back(outfile + "-t265.bag");
             cfgs.emplace_back();
             rs2::config &cfg = cfgs.back();
-            cfg.enable_device(dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+            // Comment out the following line to avoid a bug
+            //cfg.enable_device(dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
             cfg.enable_record_to_file(filenames.back());
             cfg.enable_stream(RS2_STREAM_FISHEYE, 1, 848, 800, RS2_FORMAT_Y8, 30);
             cfg.enable_stream(RS2_STREAM_FISHEYE, 2, 848, 800, RS2_FORMAT_Y8, 30);
@@ -92,6 +93,7 @@ int main(int argc, char * argv[])
 
     std::vector<rs2::pipeline> pipelines;
     // We need to start T265 first!! For some reason I can't explain.
+    // -- no longer needed but let's keep it anyway
     for (ssize_t i = cfgs.size() - 1; i >= 0 ; --i) {
         pipelines.emplace_back(ctx);
         int retry = 5;
@@ -112,10 +114,18 @@ int main(int argc, char * argv[])
     }
 
     if (pipelines.empty()) return EXIT_FAILURE;
+    auto t0 = std::chrono::system_clock::now();
+    auto tk = t0;
     signal(SIGINT, intHandler);
     std::cout << "======================= Press Ctrl+C to stop =======================\n";
     while(running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto t = std::chrono::system_clock::now();
+        if (t - tk >= std::chrono::seconds(1)) {
+            std::cout << "\r" << std::setprecision(3) << std::fixed
+                      << "Recording t = "  << std::chrono::duration_cast<std::chrono::seconds>(t-t0).count() << "s" << std::flush;
+            tk = t;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     std::cout << "\nStopping..." << std::flush;
 
