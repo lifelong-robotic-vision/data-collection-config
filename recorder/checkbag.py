@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 import rosbag
 import sys
 import numpy
@@ -8,6 +9,7 @@ from termcolor import colored
 verbose = False
 
 def check_headers(headers):
+    all_t = set()
     logs = {}
     log_ids = []
     intervals = []
@@ -15,9 +17,11 @@ def check_headers(headers):
     tmin_world = float('inf')
     tmax = -float('inf')
     last_seq = float('nan')
+    ndrop = 0
     for h in headers:
         seq = h.seq
         t = h.stamp.to_sec()
+        all_t.add(t)
         if t > tmax: tmax = t
         if t < tmin: tmin = t
         if t < tmin_world and t > 1000000000: tmin_world = t
@@ -29,9 +33,10 @@ def check_headers(headers):
         intervals.append(delta)
         if (seq != 0 or last_seq != 0) and seq != last_seq+1:
             logs[t] = (("message drop (" + colored("seq %d->%d", 'red') + " interval %f ms)") % (last_seq, seq, delta))
+            ndrop += seq - last_seq - 1
         elif delta <= 0:
             logs[t] = (("out-of-order (seq %d->%d " + colored("interval %f ms", 'red') + ")") % (last_seq, seq, delta))
-        elif delta > 1000:
+        elif delta > 1e9:
             logs[t] = (("invalid stamp (seq %d->%d " + colored("stamp %f->%f", 'red') + " interval %f ms)") % (last_seq, seq, last_t, t, delta))
             intervals[-1] = float('nan')
         last_seq = seq
@@ -61,18 +66,22 @@ def check_headers(headers):
 
     if args.verbose:
         for t in sorted(logs.keys()): print ("\t" + "%2.0f%%: " % ((t-tmin) / (tmax-tmin) * 100)  + logs[t])
-    else:
-        ndrop = 0
+    if True:
+        nlarge = 0
         norder = 0
         ninvalid = 0
         nsmall = 0
-        msg = list('.' * 101)
+        msg = list('X' * 101)
+        for t in all_t:
+            perc = int((t-tmin) / (tmax-tmin) * 100)
+            if perc < 0 or perc > 100: continue
+            msg[perc] = '.'
         for t in logs.keys():
             perc = int((t-tmin) / (tmax-tmin) * 100)
             if perc < 0 or perc > 100: print perc
-            if 'drop' in logs[t] or 'large' in logs[t]:
-                ndrop += 1
-                msg[perc] = 'D'
+            if 'large' in logs[t]:
+                nlarge += 1
+                msg[perc] = 'L'
             elif 'out-of-order' in logs[t]:
                 norder += 1
                 msg[perc] = 'O'
@@ -84,8 +93,8 @@ def check_headers(headers):
                 if msg[perc] == '.': msg[perc] = 's'
         ratio = 100. / len(headers)
         ntotal = ndrop + norder + ninvalid + nsmall
-        print ('%d drops (%.1f%%); %d out-of-order (%.1f%%); %d invalid stamp (%.1f%%); %d small intervals (%.1f%%); %d total abnormal (%.1f%%)' \
-            % (ndrop, ndrop * ratio, norder, norder * ratio, ninvalid, ninvalid * ratio, nsmall, nsmall * ratio, ntotal, ntotal * ratio))
+        print ('%d drops (%.1f%%); %d out-of-order (%.1f%%); %d invalid stamp (%.1f%%); %d large intervals (%.1f%%); %d small intervals (%.1f%%); %d total abnormal (%.1f%%)' \
+            % (ndrop, ndrop * ratio, norder, norder * ratio, ninvalid, ninvalid * ratio, nlarge, nlarge * ratio, nsmall, nsmall * ratio, ntotal, ntotal * ratio))
         print (''.join(msg))
 
 def print_highlight(s):
