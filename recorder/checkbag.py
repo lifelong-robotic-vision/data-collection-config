@@ -2,6 +2,7 @@ import rosbag
 import sys
 import numpy
 import math
+import argparse
 from termcolor import colored
 
 verbose = False
@@ -11,20 +12,22 @@ def check_headers(headers):
     log_ids = []
     intervals = []
     tmin = float('inf')
+    tmin_world = float('inf')
     tmax = -float('inf')
     last_seq = float('nan')
     for h in headers:
         seq = h.seq
         t = h.stamp.to_sec()
         if t > tmax: tmax = t
-        if t < tmin and t > 1000000000: tmin = t
+        if t < tmin: tmin = t
+        if t < tmin_world and t > 1000000000: tmin_world = t
         if math.isnan(last_seq):
             last_seq = seq
             last_t = t
             continue
         delta = (t - last_t) * 1000
         intervals.append(delta)
-        if seq != last_seq+1:
+        if (seq != 0 or last_seq != 0) and seq != last_seq+1:
             logs[t] = (("message drop (" + colored("seq %d->%d", 'red') + " interval %f ms)") % (last_seq, seq, delta))
         elif delta <= 0:
             logs[t] = (("out-of-order (seq %d->%d " + colored("interval %f ms", 'red') + ")") % (last_seq, seq, delta))
@@ -33,6 +36,8 @@ def check_headers(headers):
             intervals[-1] = float('nan')
         last_seq = seq
         last_t = t
+
+    if not math.isinf(tmin_world): tmin = tmin_world
 
     ints = numpy.array(intervals)
     median = numpy.nanmedian(ints)
@@ -54,15 +59,14 @@ def check_headers(headers):
         if not logs.has_key(t):
             logs[t] = (("small interval (seq %d->%d " + colored("interval %f ms", 'red') + ")") % (headers[i].seq, headers[i+1].seq, ints[i]))
 
-    global verbose
-    if verbose:
+    if args.verbose:
         for t in sorted(logs.keys()): print ("\t" + "%2.0f%%: " % ((t-tmin) / (tmax-tmin) * 100)  + logs[t])
     else:
         ndrop = 0
         norder = 0
         ninvalid = 0
         nsmall = 0
-        msg = list('.' * 100)
+        msg = list('.' * 101)
         for t in logs.keys():
             perc = int((t-tmin) / (tmax-tmin) * 100)
             if perc < 0 or perc > 100: print perc
@@ -119,15 +123,13 @@ def check_bag(bag):
 
     print_highlight ("There are other %d topics each having only one message" % len(one_msg_topics))
 
-
-def main():
-    if len(sys.argv) != 2:
-        print ("Usage: " + sys.argv[0] + " filename")
-        return
-
-    bag = rosbag.Bag(sys.argv[1])
-    check_bag(bag)
-    bag.close()
-
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", '--verbose', dest='verbose', action='store_true')
+    parser.set_defaults(verbose=False)
+    args, left = parser.parse_known_args()
+    if len(left) < 1:
+        print ("Usage: " + sys.argv[0] + " [-v] filename [more ...]")
+        exit()
+    for bag in left:
+        check_bag(rosbag.Bag(bag))
