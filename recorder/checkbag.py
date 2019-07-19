@@ -102,9 +102,8 @@ def print_highlight(s):
 
 def check_bag(bag):
     topic_headers = {}
-    topic_times = {}
+    topic_count = {}
     one_msg_topics = []
-    no_header_topics = {}
     for topic, msg, t in bag.read_messages():
         if hasattr(msg, 'header'):
             if topic not in topic_headers:
@@ -112,10 +111,10 @@ def check_bag(bag):
             else:
                 topic_headers[topic].append(msg.header)
         else:
-            if topic not in topic_headers:
-                topic_times[topic] = [t.to_sec()]
+            if topic not in topic_count:
+                topic_count[topic] = 1
             else:
-                topic_times[topic].append(t.to_sec())
+                topic_count[topic] += 1
 
     for topic in topic_headers:
         if len(topic_headers[topic]) is 1:
@@ -124,11 +123,11 @@ def check_bag(bag):
         print_highlight (topic + ": %d messages" % len(topic_headers[topic]))
         check_headers(topic_headers[topic])
 
-    for topic in topic_times:
-        if len(topic_times[topic]) is 1:
+    for topic in topic_count:
+        if topic_count[topic] is 1:
             one_msg_topics.append(topic)
             continue
-        print_highlight (topic + ": %d messages without stamp" % len(topic_times[topic]))
+        print_highlight (topic + ": %d messages without header" % topic_count[topic])
 
     print_highlight ("There are other %d topics each having only one message" % len(one_msg_topics))
 
